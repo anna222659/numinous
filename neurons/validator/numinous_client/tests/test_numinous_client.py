@@ -2,6 +2,7 @@ import asyncio
 import base64
 import json
 from datetime import datetime, timezone
+from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID
@@ -26,12 +27,14 @@ from neurons.validator.models.numinous_client import (
     GetEventsResolvedResponse,
     GetEventsResponse,
     GetWeightsResponse,
+    OpenRouterInferenceRequest,
     PostAgentLogsRequestBody,
     PostAgentRunsRequestBody,
     PostPredictionsRequestBody,
     PostScoresRequestBody,
     UpdateAgentRunRequest,
 )
+from neurons.validator.models.openrouter import OpenRouterCompletion
 from neurons.validator.numinous_client.client import NuminousClient, NuminousEnvType
 from neurons.validator.utils.git import commit_short_hash
 from neurons.validator.utils.logger.logger import NuminousLogger
@@ -1305,5 +1308,129 @@ class TestNuminousClient:
                 await client_test_env.get_weights()
 
             mocked.assert_called_with(url_path)
+
+            assert e.value.status == status_code
+
+    async def test_openrouter_chat_completion_invalid_params(self, client_test_env: NuminousClient):
+        invalid_body = {"invalid_field": "value"}
+        with pytest.raises(ValueError, match="Invalid parameters"):
+            await client_test_env.openrouter_chat_completion(body=invalid_body)
+
+    async def test_openrouter_chat_completion(self, client_test_env: NuminousClient):
+        mock_response_data = {
+            "id": "gen-abc123",
+            "object": "chat.completion",
+            "created": 1700000000,
+            "model": "anthropic/claude-sonnet-4-6",
+            "choices": [
+                {
+                    "index": 0,
+                    "message": {"role": "assistant", "content": "This is a test response."},
+                    "finish_reason": "stop",
+                }
+            ],
+            "usage": {
+                "prompt_tokens": 25,
+                "completion_tokens": 10,
+                "total_tokens": 35,
+                "cost": 0.000225,
+            },
+        }
+
+        request_body = OpenRouterInferenceRequest.model_validate(
+            {
+                "run_id": "123e4567-e89b-12d3-a456-426614174000",
+                "model": "anthropic/claude-sonnet-4-6",
+                "messages": [
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": "Hello!"},
+                ],
+                "temperature": 0.7,
+                "max_tokens": 100,
+            }
+        )
+
+        with aioresponses() as mocked:
+            url_path = "/api/gateway/openrouter/chat/completions"
+
+            mocked.post(
+                url_path,
+                status=200,
+                body=json.dumps(mock_response_data).encode("utf-8"),
+            )
+
+            result = await client_test_env.openrouter_chat_completion(body=request_body)
+
+            assert isinstance(result, OpenRouterCompletion)
+            assert result.id == "gen-abc123"
+            assert result.model == "anthropic/claude-sonnet-4-6"
+            assert len(result.choices) == 1
+            assert result.choices[0].message.content == "This is a test response."
+            assert result.usage is not None
+            assert result.usage.prompt_tokens == 25
+            assert result.usage.completion_tokens == 10
+            assert result.usage.cost == Decimal("0.000225")
+
+    async def test_openrouter_chat_completion_with_dict(self, client_test_env: NuminousClient):
+        mock_response_data = {
+            "id": "gen-def456",
+            "object": "chat.completion",
+            "created": 1700000000,
+            "model": "google/gemini-2.5-flash",
+            "choices": [
+                {
+                    "index": 0,
+                    "message": {"role": "assistant", "content": "Response from dict input."},
+                    "finish_reason": "stop",
+                }
+            ],
+        }
+
+        request_body_dict = {
+            "run_id": "223e4567-e89b-12d3-a456-426614174001",
+            "model": "google/gemini-2.5-flash",
+            "messages": [
+                {"role": "user", "content": "Test message"},
+            ],
+        }
+
+        with aioresponses() as mocked:
+            url_path = "/api/gateway/openrouter/chat/completions"
+
+            mocked.post(
+                url_path,
+                status=200,
+                body=json.dumps(mock_response_data).encode("utf-8"),
+            )
+
+            result = await client_test_env.openrouter_chat_completion(body=request_body_dict)
+
+            assert isinstance(result, OpenRouterCompletion)
+            assert result.id == "gen-def456"
+            assert result.model == "google/gemini-2.5-flash"
+
+    async def test_openrouter_chat_completion_error_raised(self, client_test_env: NuminousClient):
+        mock_response_data = {"error": "Service unavailable"}
+
+        request_body = OpenRouterInferenceRequest.model_validate(
+            {
+                "run_id": "323e4567-e89b-12d3-a456-426614174002",
+                "model": "anthropic/claude-sonnet-4-6",
+                "messages": [{"role": "user", "content": "Test"}],
+            }
+        )
+        status_code = 503
+
+        with aioresponses() as mocked:
+            url_path = "/api/gateway/openrouter/chat/completions"
+
+            mocked.post(
+                url_path,
+                status=status_code,
+                body=json.dumps(mock_response_data).encode("utf-8"),
+            )
+
+            with pytest.raises(ClientResponseError) as e:
+                await client_test_env.openrouter_chat_completion(body=request_body)
 
             assert e.value.status == status_code

@@ -15,6 +15,7 @@ from neurons.validator.models.desearch import (
     XPostSummary,
     XUser,
 )
+from neurons.validator.models.openrouter import OpenRouterCompletion
 
 
 @pytest.fixture
@@ -35,6 +36,10 @@ class TestGatewayApp:
         assert "/api/gateway/desearch/web/crawl" in routes
         assert "/api/gateway/desearch/x/search" in routes
         assert "/api/gateway/desearch/x/post" in routes
+        assert "/api/gateway/openai/responses" in routes
+        assert "/api/gateway/perplexity/chat/completions" in routes
+        assert "/api/gateway/vericore/calculate-rating" in routes
+        assert "/api/gateway/openrouter/chat/completions" in routes
 
 
 class TestHealthEndpoint:
@@ -577,6 +582,80 @@ class TestDesearchEndpoints:
 
         assert response.status_code == 500
         assert "Desearch API error" in response.json()["detail"]
+
+
+class TestOpenRouterEndpoint:
+    @patch("neurons.miner.gateway.app.OpenRouterClient")
+    @patch.dict("os.environ", {"OPENROUTER_API_KEY": "test-key"})
+    def test_openrouter_completion_success(self, mock_client_class, client: TestClient):
+        mock_response = OpenRouterCompletion(
+            id="gen-abc123",
+            object="chat.completion",
+            created=1709000000,
+            model="anthropic/claude-sonnet-4-6",
+            choices=[
+                {
+                    "index": 0,
+                    "message": {"role": "assistant", "content": "Test response"},
+                    "finish_reason": "stop",
+                }
+            ],
+            usage={
+                "prompt_tokens": 50,
+                "completion_tokens": 100,
+                "total_tokens": 150,
+                "cost": 0.00165,
+            },
+        )
+
+        mock_instance = mock_client_class.return_value
+        mock_instance.chat_completion = AsyncMock(return_value=mock_response)
+
+        request_body = {
+            "run_id": str(uuid4()),
+            "model": "anthropic/claude-sonnet-4-6",
+            "messages": [{"role": "user", "content": "Hello"}],
+            "temperature": 0.7,
+        }
+
+        response = client.post("/api/gateway/openrouter/chat/completions", json=request_body)
+
+        assert response.status_code == 200
+
+        result = response.json()
+        assert result["id"] == "gen-abc123"
+        assert result["model"] == "anthropic/claude-sonnet-4-6"
+        assert "cost" in result
+
+    @patch.dict("os.environ", {"OPENROUTER_API_KEY": ""})
+    def test_openrouter_completion_missing_api_key(self, client: TestClient):
+        request_body = {
+            "run_id": str(uuid4()),
+            "model": "anthropic/claude-sonnet-4-6",
+            "messages": [{"role": "user", "content": "Test"}],
+        }
+
+        response = client.post("/api/gateway/openrouter/chat/completions", json=request_body)
+
+        assert response.status_code == 401
+        assert "OPENROUTER_API_KEY not configured" in response.json()["detail"]
+
+    @patch("neurons.miner.gateway.app.OpenRouterClient")
+    @patch.dict("os.environ", {"OPENROUTER_API_KEY": "test-key"})
+    def test_openrouter_completion_api_error(self, mock_client_class, client: TestClient):
+        mock_instance = mock_client_class.return_value
+        mock_instance.chat_completion = AsyncMock(side_effect=Exception("API Error"))
+
+        request_body = {
+            "run_id": str(uuid4()),
+            "model": "anthropic/claude-sonnet-4-6",
+            "messages": [{"role": "user", "content": "Test"}],
+        }
+
+        response = client.post("/api/gateway/openrouter/chat/completions", json=request_body)
+
+        assert response.status_code == 500
+        assert "OpenRouter API error" in response.json()["detail"]
 
 
 class TestRequestValidation:

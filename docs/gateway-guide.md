@@ -10,10 +10,11 @@ The Gateway API provides miner agents with access to external services during sa
 - **OpenAI**: GPT-5 series models with built-in web search
 - **Perplexity**: Reasoning LLMs with built-in web search
 - **Vericore**: Statement verification with evidence-based metrics
+- **OpenRouter**: Model router with access to hundreds of LLM models (Claude, Gemini, Llama, etc.)
 
 All requests are cached to optimize performance and reduce costs.
 
-**Cost Limits:** $0.01 (default) or $0.10 (linked account) per sandbox run for Chutes and Desearch. OpenAI: $1.00 per run (requires linked account, no free tier). Perplexity: $0.10 per run (requires linked account, no free tier). Vericore: $0.10 per run (requires linked account, no free tier).
+**Cost Limits:** $0.01 (default) or $0.10 (linked account) per sandbox run for Chutes and Desearch. OpenAI: $1.00 per run (requires linked account, no free tier). Perplexity: $0.10 per run (requires linked account, no free tier). Vericore: $0.10 per run (requires linked account, no free tier). OpenRouter: $0.10 per run (requires linked account, no free tier).
 
 **Security:** API keys are securely stored using external secret management and never exposed to validators.
 
@@ -1171,6 +1172,134 @@ credibility = summary["source_credibility"]
 | 500 | Internal server error | Retry with fallback |
 
 **Note:** Vericore has no free tier. You must link your API key to use Vericore. Each call costs $0.05.
+
+---
+
+## OpenRouter Endpoints
+
+OpenRouter is a model router that provides access to hundreds of LLM models through a unified API. You can use models from Anthropic, Google, Meta, and many other providers.
+
+### POST /api/gateway/openrouter/chat/completions
+
+Generate chat completions using any OpenRouter-supported model.
+
+**URL:** `{SANDBOX_PROXY_URL}/api/gateway/openrouter/chat/completions`
+
+**Request Body:**
+```json
+{
+  "run_id": "550e8400-e29b-41d4-a716-446655440000",
+  "model": "anthropic/claude-sonnet-4-6",
+  "messages": [
+    {"role": "system", "content": "You are a helpful assistant."},
+    {"role": "user", "content": "What is the capital of France?"}
+  ],
+  "temperature": 0.7,
+  "max_tokens": 1024
+}
+```
+
+**Parameters:**
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `run_id` | string (UUID) | Yes | - | Execution tracking ID from environment |
+| `model` | string | Yes | - | OpenRouter model ID (e.g., `anthropic/claude-sonnet-4-6`) |
+| `messages` | array | Yes | - | Chat messages array with `role` and `content` |
+| `temperature` | float | No | 0.7 | Sampling temperature (0.0-2.0) |
+| `max_tokens` | integer | No | - | Maximum tokens to generate |
+| `tools` | array | No | - | Tool/function definitions for function calling |
+| `tool_choice` | string/object | No | - | Tool selection mode |
+
+**Response:**
+```json
+{
+  "id": "gen-abc123",
+  "object": "chat.completion",
+  "created": 1700000000,
+  "model": "anthropic/claude-sonnet-4-6",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "The capital of France is Paris."
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 25,
+    "completion_tokens": 10,
+    "total_tokens": 35,
+    "cost": 0.000135
+  },
+  "cost": 0.000135
+}
+```
+
+**Response Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | Unique completion identifier |
+| `model` | string | Model used for the completion |
+| `choices` | array | Array of completion choices |
+| `choices[].message.content` | string | Generated text response |
+| `choices[].finish_reason` | string | Why generation stopped (`stop`, `length`, `tool_calls`) |
+| `usage.prompt_tokens` | integer | Input tokens used |
+| `usage.completion_tokens` | integer | Output tokens generated |
+| `usage.cost` | decimal | Actual cost reported by OpenRouter |
+| `cost` | decimal | Total cost for this request |
+
+**Popular Models:**
+
+| Model ID | Description |
+|----------|-------------|
+| `anthropic/claude-sonnet-4-6` | Claude Sonnet 4.6 - balanced performance |
+| `anthropic/claude-haiku-4-5` | Claude Haiku 4.5 - fast and cost-effective |
+| `google/gemini-2.5-flash` | Gemini 2.5 Flash - fast and affordable |
+| `google/gemini-2.5-pro` | Gemini 2.5 Pro - high capability |
+
+See the full model list at https://openrouter.ai/models
+
+**Example (using httpx):**
+```python
+import os
+import httpx
+
+PROXY_URL = os.getenv("SANDBOX_PROXY_URL")
+RUN_ID = os.getenv("RUN_ID")
+
+response = httpx.post(
+    f"{PROXY_URL}/api/gateway/openrouter/chat/completions",
+    json={
+        "run_id": RUN_ID,
+        "model": "anthropic/claude-sonnet-4-6",
+        "messages": [
+            {"role": "user", "content": "Analyze the likelihood of this event..."}
+        ],
+        "temperature": 0.2,
+        "max_tokens": 1024,
+    },
+    timeout=120.0,
+)
+
+result = response.json()
+content = result["choices"][0]["message"]["content"]
+cost = result.get("cost", 0.0)
+```
+
+**Error Handling:**
+
+| Status Code | Description | Recommended Action |
+|-------------|-------------|-------------------|
+| 503 | Service Unavailable | Retry with exponential backoff |
+| 429 | Rate limit exceeded | Retry with exponential backoff |
+| 401 | Authentication failed | Contact validator |
+| 500 | Internal server error | Retry with fallback model |
+
+**Note:** OpenRouter has no free tier. You must link your API key to use OpenRouter models.
 
 ---
 
