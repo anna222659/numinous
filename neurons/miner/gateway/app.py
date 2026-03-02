@@ -10,6 +10,7 @@ from neurons.miner.gateway.error_handler import handle_provider_errors
 from neurons.miner.gateway.providers.chutes import ChutesClient
 from neurons.miner.gateway.providers.desearch import DesearchClient
 from neurons.miner.gateway.providers.openai import OpenAIClient
+from neurons.miner.gateway.providers.openrouter import OpenRouterClient
 from neurons.miner.gateway.providers.perplexity import PerplexityClient
 from neurons.miner.gateway.providers.vericore import VericoreClient
 from neurons.validator.models import numinous_client as models
@@ -18,6 +19,7 @@ from neurons.validator.models.chutes import calculate_cost as calculate_chutes_c
 from neurons.validator.models.desearch import DesearchEndpoint
 from neurons.validator.models.desearch import calculate_cost as calculate_desearch_cost
 from neurons.validator.models.openai import calculate_cost as calculate_openai_cost
+from neurons.validator.models.openrouter import calculate_cost as calculate_openrouter_cost
 from neurons.validator.models.perplexity import calculate_cost as calculate_perplexity_cost
 from neurons.validator.models.vericore import calculate_cost as calculate_vericore_cost
 
@@ -320,6 +322,38 @@ async def vericore_calculate_rating(
     )
 
     return models.GatewayVericoreResponse(**result.model_dump(), cost=calculate_vericore_cost())
+
+
+@gateway_router.post(
+    "/openrouter/chat/completions", response_model=models.GatewayOpenRouterCompletion
+)
+@cached_gateway_call
+@handle_provider_errors("OpenRouter")
+async def openrouter_chat_completion(
+    request: models.OpenRouterInferenceRequest,
+) -> models.GatewayOpenRouterCompletion:
+    api_key = os.getenv("OPENROUTER_API_KEY")
+    if not api_key:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="OPENROUTER_API_KEY not configured",
+        )
+
+    client = OpenRouterClient(api_key=api_key)
+    messages = [msg.model_dump() for msg in request.messages]
+    result = await client.chat_completion(
+        model=request.model,
+        messages=messages,
+        temperature=request.temperature,
+        max_tokens=request.max_tokens,
+        tools=request.tools,
+        tool_choice=request.tool_choice,
+        **(request.model_extra or {}),
+    )
+
+    return models.GatewayOpenRouterCompletion(
+        **result.model_dump(), cost=calculate_openrouter_cost(result)
+    )
 
 
 app.include_router(gateway_router)

@@ -13,6 +13,7 @@ API_KEYS = [
     ("OPENAI_API_KEY", "OpenAI", "https://platform.openai.com/api-keys"),
     ("PERPLEXITY_API_KEY", "Perplexity", "https://www.perplexity.ai/settings/api"),
     ("VERICORE_API_KEY", "Vericore", "https://vericore.ai"),
+    ("OPENROUTER_API_KEY", "OpenRouter", "https://openrouter.ai"),
 ]
 
 

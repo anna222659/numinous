@@ -1,5 +1,8 @@
 # Release Notes
 
+## [2.1.2] - 2026-03-02
+- **Integration**: OpenRouter API integration
+
 ## [2.1.1] - 2026-02-25
 - **Sandbox**: Increase agent sandbox execution timeout to 240 seconds
 - **Integration**: Vericore API integration

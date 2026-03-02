@@ -34,6 +34,7 @@ All events are currently 3 days events. The length of the immunity period is 7 d
 - **OpenAI API key** (for local testing with GPT-5 models)
 - **Perplexity API key** (for local testing with reasoning LLMs)
 - **Vericore API key** (for local testing with statement verification)
+- **OpenRouter API key** (for local testing with multi-provider LLM access)
 
 **Get API Keys:**
 - Chutes AI: https://chutes.ai/app
@@ -41,6 +42,7 @@ All events are currently 3 days events. The length of the immunity period is 7 d
 - OpenAI: https://platform.openai.com/api-keys
 - Perplexity: https://www.perplexity.ai/settings/api
 - Vericore: https://vericore.ai
+- OpenRouter: https://openrouter.ai/settings/keys
 
 **⚠️ OpenAI Security Recommendation:**
 
@@ -725,6 +727,19 @@ You'll be prompted for:
 
 **Important:** Re-link after each agent upload - each code version needs its own link.
 
+### OpenRouter (Multi-Provider LLMs)
+
+Link your OpenRouter account for access to hundreds of LLM models (Claude, Gemini, Llama, etc.):
+
+```bash
+numi services link openrouter
+```
+
+You'll be prompted for:
+- Your OpenRouter API key (get from https://openrouter.ai/settings/keys)
+
+**Note:** OpenRouter has no free tier. You must link your account to use OpenRouter models.
+
 Check your linked services anytime:
 ```bash
 numi services list
@@ -749,8 +764,9 @@ numi services link chutes     # Link Chutes API key
 numi services link desearch   # Link Desearch API key
 numi services link openai     # Link OpenAI API key
 numi services link perplexity # Link Perplexity API key
-numi services link vericore  # Link Vericore API key
-numi services list            # Check linked services
+numi services link vericore    # Link Vericore API key
+numi services link openrouter  # Link OpenRouter API key
+numi services list             # Check linked services
 
 # Local Testing
 numi test-agent            # Test agent with real events

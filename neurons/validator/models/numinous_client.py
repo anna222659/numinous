@@ -19,6 +19,7 @@ from neurons.validator.models.desearch import (
     XPostSummary,
 )
 from neurons.validator.models.openai import OpenAIResponse
+from neurons.validator.models.openrouter import OpenRouterCompletion
 from neurons.validator.models.perplexity import PerplexityCompletion
 from neurons.validator.models.vericore import VericoreResponse
 
@@ -371,6 +372,35 @@ class PerplexityInferenceRequest(GatewayCall):
 
 
 class GatewayPerplexityCompletion(PerplexityCompletion, GatewayCallResponse):
+    pass
+
+
+class OpenRouterMessage(BaseModel):
+    role: str = Field(..., description="Message role: 'system', 'user', 'assistant', or 'tool'")
+    content: typing.Optional[typing.Union[str, list]] = Field(
+        "", description="Message content (can be None for tool calls)"
+    )
+
+    model_config = ConfigDict(extra="allow")
+
+
+class OpenRouterInferenceRequest(GatewayCall):
+    model: str = Field(..., description="OpenRouter model ID (e.g. anthropic/claude-sonnet-4-6)")
+    messages: list[OpenRouterMessage] = Field(..., description="List of chat messages")
+    temperature: float = Field(default=0.7, ge=0.0, le=2.0, description="Sampling temperature")
+    max_tokens: typing.Optional[int] = Field(default=None, description="Maximum tokens to generate")
+    tools: typing.Optional[list[dict[str, typing.Any]]] = Field(
+        default=None, description="Tool definitions for function calling"
+    )
+    tool_choice: typing.Optional[typing.Any] = Field(
+        default=None,
+        description="Tool choice setting ('auto', 'required', or specific tool)",
+    )
+
+    model_config = ConfigDict(extra="allow")
+
+
+class GatewayOpenRouterCompletion(OpenRouterCompletion, GatewayCallResponse):
     pass
 
 
